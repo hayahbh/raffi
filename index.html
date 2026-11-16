@@ -1859,6 +1859,33 @@
       ]),
       h('label', {}, ['اسم الكتاب *']), f.title,
       (function(){
+        var box = h('div', {style:'margin-top:6px;'}, []);
+        var btn = h('button', {class:'btn secondary small', onclick:function(){
+          var q = (f.title.value.trim() + ' ' + f.author.value.trim()).trim();
+          if(!q){ toast('اكتبي اسم الكتاب أول'); return; }
+          btn.disabled = true; box.innerHTML = ''; box.appendChild(h('p', {class:'empty-hint', style:'font-size:12px;'}, ['أدوّر…']));
+          webBookSearch(q).then(function(list){
+            box.innerHTML = '';
+            if(!list.length){ box.appendChild(h('p', {class:'empty-hint', style:'font-size:12px;'}, ['ما لقيته. جرّبي الاسم بالإنجليزي أو اسم الكاتب.'])); return; }
+            list.slice(0,5).forEach(function(b){
+              var meta = [b.author, b.year, b.pages ? b.pages + ' صفحة' : ''].filter(Boolean).join(' · ');
+              box.appendChild(h('button', {class:'rating-list-item', style:'display:flex; gap:10px; align-items:center; width:100%; text-align:right; background:var(--ground); border:1px solid var(--line); border-radius:10px; padding:8px; margin-bottom:6px; color:var(--ink);', onclick:function(){
+                function put(el, v){ if(v!=null && String(v).trim()) el.value = String(v).trim(); }
+                put(f.title, b.title); put(f.author, b.author); put(f.translator, b.translator); put(f.publisher, b.publisher);
+                put(f.genre, b.genre); put(f.totalPages, b.pages); put(f.synopsis, b.synopsis); put(f.seriesName, b.series);
+                if(b.coverUrl && !coverData) urlToCover(b.coverUrl, function(d){ coverData = d; coverPreview.innerHTML = ''; coverPreview.appendChild(h('img', {src:d, style:'width:100%;height:100%;object-fit:cover;'})); });
+                box.innerHTML = ''; box.appendChild(h('p', {class:'empty-hint', style:'font-size:12px;'}, ['عبّيت المعلومات، تأكّدي منها قبل الحفظ.']));
+              }}, [
+                b.coverUrl ? h('img', {src:b.coverUrl, style:'width:34px;height:50px;object-fit:cover;border-radius:3px;flex:none;'}) : null,
+                h('div', {style:'flex:1;'}, [h('div', {style:'font-weight:700; font-size:13px;'}, [b.title]), meta ? h('div', {style:'font-size:11.5px; color:var(--ink-soft);'}, [meta]) : null])
+              ]));
+            });
+          }).catch(function(){ box.innerHTML = ''; box.appendChild(h('p', {class:'empty-hint', style:'font-size:12px;'}, ['ما قدرت أدوّر، تأكّدي من النت.'])); })
+            .then(function(){ btn.disabled = false; });
+        }}, ['🔎 عبّي المعلومات من النت']);
+        return h('div', {style:'margin-top:8px;'}, [btn, box]);
+      })(),
+      (function(){
         var link = h('a', {class:'link-btn', target:'_blank', rel:'noopener noreferrer',
           href:'https://www.google.com/search?q=' + encodeURIComponent('كتاب مؤلف')}, ['بحث عن هذا الكتاب في Google']);
         f.title.addEventListener('input', function(){
@@ -1934,15 +1961,33 @@
       coverUrl: img ? img.replace(/^http:/, 'https:').replace('&edge=curl', '') : ''
     };
   }
+  function olSearch(q){
+    var clean = q.replace(/intitle:|inauthor:|"/g, ' ').replace(/\s+/g, ' ').trim();
+    return fetch('https://openlibrary.org/search.json?limit=10&fields=title,subtitle,author_name,publisher,first_publish_year,number_of_pages_median,isbn,cover_i&q=' + encodeURIComponent(clean))
+      .then(function(r){ if(!r.ok) throw {code:'net', status:r.status}; return r.json(); })
+      .then(function(d){
+        return (d.docs||[]).map(function(x){
+          return {title: x.title ? x.title + (x.subtitle ? ': ' + x.subtitle : '') : '', author:(x.author_name||[]).slice(0,2).join('، '), translator:'',
+            publisher:(x.publisher||[])[0]||'', year:x.first_publish_year||null, pages:x.number_of_pages_median||null, genre:'', series:'', synopsis:'',
+            isbn:((x.isbn||[]).filter(function(i){ return /^97[89]/.test(i); })[0])||'', coverUrl: x.cover_i ? 'https://covers.openlibrary.org/b/id/' + x.cover_i + '-M.jpg' : ''};
+        }).filter(function(b){ return b.title; }).slice(0, 8);
+      });
+  }
   function webBookSearch(q){
     var url = 'https://www.googleapis.com/books/v1/volumes?maxResults=12&printType=books&q=' + encodeURIComponent(q);
-    return fetch(url).then(function(r){ if(!r.ok) throw {code:'net'}; return r.json(); }).then(function(d){
+    return fetch(url).then(function(r){ if(!r.ok) throw {code:'net', status:r.status}; return r.json(); }).then(function(d){
       var seen = {};
       return (d.items||[]).map(gbToBook).filter(function(b){
         if(!b.title) return false;
         var k = normalizeAr(b.title) + '|' + normalizeAr(b.author);
         if(seen[k]) return false; seen[k] = true; return true;
       }).slice(0, 8);
+    }).then(function(list){
+      /* لو Google ما رجّع شي، نجرب Open Library */
+      return list.length ? list : olSearch(q).catch(function(){ return list; });
+    }, function(err){
+      console.warn('google books', err);
+      return olSearch(q);
     });
   }
   function isbnLookup(isbn){

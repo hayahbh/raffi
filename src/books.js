@@ -28,15 +28,33 @@
       coverUrl: img ? img.replace(/^http:/, 'https:').replace('&edge=curl', '') : ''
     };
   }
+  function olSearch(q){
+    var clean = q.replace(/intitle:|inauthor:|"/g, ' ').replace(/\s+/g, ' ').trim();
+    return fetch('https://openlibrary.org/search.json?limit=10&fields=title,subtitle,author_name,publisher,first_publish_year,number_of_pages_median,isbn,cover_i&q=' + encodeURIComponent(clean))
+      .then(function(r){ if(!r.ok) throw {code:'net', status:r.status}; return r.json(); })
+      .then(function(d){
+        return (d.docs||[]).map(function(x){
+          return {title: x.title ? x.title + (x.subtitle ? ': ' + x.subtitle : '') : '', author:(x.author_name||[]).slice(0,2).join('، '), translator:'',
+            publisher:(x.publisher||[])[0]||'', year:x.first_publish_year||null, pages:x.number_of_pages_median||null, genre:'', series:'', synopsis:'',
+            isbn:((x.isbn||[]).filter(function(i){ return /^97[89]/.test(i); })[0])||'', coverUrl: x.cover_i ? 'https://covers.openlibrary.org/b/id/' + x.cover_i + '-M.jpg' : ''};
+        }).filter(function(b){ return b.title; }).slice(0, 8);
+      });
+  }
   function webBookSearch(q){
     var url = 'https://www.googleapis.com/books/v1/volumes?maxResults=12&printType=books&q=' + encodeURIComponent(q);
-    return fetch(url).then(function(r){ if(!r.ok) throw {code:'net'}; return r.json(); }).then(function(d){
+    return fetch(url).then(function(r){ if(!r.ok) throw {code:'net', status:r.status}; return r.json(); }).then(function(d){
       var seen = {};
       return (d.items||[]).map(gbToBook).filter(function(b){
         if(!b.title) return false;
         var k = normalizeAr(b.title) + '|' + normalizeAr(b.author);
         if(seen[k]) return false; seen[k] = true; return true;
       }).slice(0, 8);
+    }).then(function(list){
+      /* لو Google ما رجّع شي، نجرب Open Library */
+      return list.length ? list : olSearch(q).catch(function(){ return list; });
+    }, function(err){
+      console.warn('google books', err);
+      return olSearch(q);
     });
   }
   function isbnLookup(isbn){

@@ -50,3 +50,9 @@ for a, b in [
    "      h('div', {class:'actions-row'}, [h('button', {class:'btn', onclick:openAddShoppingItemModal}, ['+ كتاب جديد للقائمة']), h('button', {class:'btn secondary', onclick:function(){ checkSeriesNow(true); }}, ['🔔 دوّري على أجزاء جديدة'])])\n    ]));")]:
     if a in s: s = s.replace(a, b)
 open(out, 'w').write(s)
+# زر «عبّي المعلومات من النت» في شاشة الكتاب الجديد
+s = open(out).read()
+a = "      h('label', {}, ['اسم الكتاب *']), f.title,\n      (function(){\n        var link = h('a', {class:'link-btn'"
+if a in s and 'عبّي المعلومات من النت' not in s:
+    s = s.replace(a, open(R + 'fill-button.txt').read(), 1)
+open(out, 'w').write(s)
