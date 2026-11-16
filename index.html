@@ -3861,7 +3861,7 @@
       var e = email.value.trim(), p = pass.value;
       if(!e || p.length < 6){ note.textContent = 'اكتبي الإيميل وكلمة سر ٦ أحرف أو أكثر'; return; }
       note.textContent = 'لحظة…';
-      var call = signup ? sb.auth.signUp({email:e, password:p}) : sb.auth.signInWithPassword({email:e, password:p});
+      var call = signup ? sb.auth.signUp({email:e, password:p, options:{emailRedirectTo: location.origin + location.pathname}}) : sb.auth.signInWithPassword({email:e, password:p});
       call.then(function(r){
         if(r.error){ note.textContent = r.error.message==='Invalid login credentials' ? 'الإيميل أو كلمة السر غلط' : r.error.message; return; }
         if(signup && !r.data.session){ note.textContent = 'أرسلنا لك إيميل تأكيد، أكّديه وارجعي سجّلي دخول'; return; }
