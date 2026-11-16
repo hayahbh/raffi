@@ -3710,9 +3710,16 @@
       else if(!it.cover && it._coverPath){ sb.storage.from('covers').remove([it._coverPath]); delete it._coverPath; delete it._coverSig; }
     });
     var chain = Promise.resolve();
-    var fails = [];
-    jobs.forEach(function(it){ chain = chain.then(function(){ return uploadCover(it).catch(function(e){ fails.push((e && (e.message||e.error)) || String(e)); }); }); });
-    return chain.then(function(){ return fails; });
+    var fails = [], done = 0, next = 0;
+    if(jobs.length > 3) setSyncBadge('saving', 'أرفع الأغلفة 0/' + jobs.length);
+    function worker(){
+      if(next >= jobs.length) return Promise.resolve();
+      var it = jobs[next++];
+      return uploadCover(it).catch(function(e){ fails.push((e && (e.message||e.error)) || String(e)); })
+        .then(function(){ done++; if(jobs.length > 3) setSyncBadge('saving', 'أرفع الأغلفة ' + done + '/' + jobs.length); return worker(); });
+    }
+    var pool = []; for(var w=0; w<6; w++) pool.push(worker());
+    return chain.then(function(){ return Promise.all(pool); }).then(function(){ return fails; });
   }
 
   /* --- المزامنة: نرسل بس اللي تغيّر --- */
@@ -3792,7 +3799,7 @@
     }
     clearTimeout(syncBadge._t);
     syncBadge.style.opacity = '1';
-    if(s==='saving') syncBadge.textContent = 'أحفظ…';
+    if(s==='saving') syncBadge.textContent = detail || 'أحفظ…';
     else if(s==='ok'){ syncBadge.textContent = 'محفوظ ✓'; syncBadge._t = setTimeout(function(){ syncBadge.style.opacity = '0'; }, 1500); }
     else { syncBadge._err = true; syncBadge.textContent = 'ما انحفظ (اضغطي لإعادة المحاولة): ' + (detail||''); syncBadge.style.color = 'var(--danger)'; return; }
     syncBadge._err = false;
