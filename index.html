@@ -3710,8 +3710,9 @@
       else if(!it.cover && it._coverPath){ sb.storage.from('covers').remove([it._coverPath]); delete it._coverPath; delete it._coverSig; }
     });
     var chain = Promise.resolve();
-    jobs.forEach(function(it){ chain = chain.then(function(){ return uploadCover(it); }); });
-    return chain;
+    var fails = [];
+    jobs.forEach(function(it){ chain = chain.then(function(){ return uploadCover(it).catch(function(e){ fails.push((e && (e.message||e.error)) || String(e)); }); }); });
+    return chain.then(function(){ return fails; });
   }
 
   /* --- المزامنة: نرسل بس اللي تغيّر --- */
@@ -3756,7 +3757,7 @@
     if(gone.length) ops.push(sb.from(t).delete().in(key, gone).then(function(r){ if(r.error) throw r.error; }));
     return Promise.all(ops).then(function(){ synced[t] = next; });
   }
-  var syncing = null, syncAgain = false;
+  var syncing = null, syncAgain = false, coverFails = [];
   function cloudSave(){
     if(!cloudUser) return;
     if(syncing){ syncAgain = true; return; }
@@ -3764,14 +3765,18 @@
     syncing = Promise.resolve().then(function(){
       normalizeIds();
       return syncCovers();
-    }).then(function(){
+    }).then(function(fails){
+      coverFails = fails || [];
       var rows = buildRows();
       /* الكتب أول، بعدين اللي يعتمد عليها */
       return syncTable('books', rows.books).then(function(){
         return Promise.all(['sessions','wishlist','mood_log','goals','favorite_authors','user_settings'].map(function(t){ return syncTable(t, rows[t]); }));
       });
-    }).then(function(){ setSyncBadge('ok'); }, function(err){
-      console.warn('sync failed', err); setSyncBadge('error');
+    }).then(function(){
+      if(coverFails.length) setSyncBadge('error', 'الكتب انحفظت، بس ' + coverFails.length + ' غلاف ما انرفع: ' + coverFails[0]);
+      else setSyncBadge('ok');
+    }, function(err){
+      console.warn('sync failed', err); setSyncBadge('error', (err && (err.message || err.details || err.hint)) || String(err));
     }).then(function(){
       syncing = null;
       if(syncAgain){ syncAgain = false; cloudSave(); }
@@ -3780,16 +3785,17 @@
   window.addEventListener('beforeunload', function(e){ if(syncing){ e.preventDefault(); e.returnValue = ''; } });
 
   var syncBadge = null;
-  function setSyncBadge(s){
+  function setSyncBadge(s, detail){
     if(!syncBadge){
-      syncBadge = h('div', {style:'position:fixed; top:10px; left:12px; z-index:30; font-size:11px; padding:4px 10px; border-radius:20px; background:var(--panel); border:1px solid var(--line); color:var(--ink-soft); transition:opacity .4s;'}, []);
+      syncBadge = h('div', {style:'position:fixed; top:10px; left:12px; z-index:30; font-size:11px; padding:4px 10px; border-radius:20px; background:var(--panel); border:1px solid var(--line); color:var(--ink-soft); transition:opacity .4s; max-width:70vw; cursor:pointer;', onclick:function(){ if(syncBadge._err){ syncBadge._err = false; cloudSave(); } }}, []);
       document.body.appendChild(syncBadge);
     }
     clearTimeout(syncBadge._t);
     syncBadge.style.opacity = '1';
     if(s==='saving') syncBadge.textContent = 'أحفظ…';
     else if(s==='ok'){ syncBadge.textContent = 'محفوظ ✓'; syncBadge._t = setTimeout(function(){ syncBadge.style.opacity = '0'; }, 1500); }
-    else { syncBadge.textContent = 'ما انحفظ، تأكّدي من النت'; syncBadge.style.color = 'var(--danger)'; return; }
+    else { syncBadge._err = true; syncBadge.textContent = 'ما انحفظ (اضغطي لإعادة المحاولة): ' + (detail||''); syncBadge.style.color = 'var(--danger)'; return; }
+    syncBadge._err = false;
     syncBadge.style.color = 'var(--ink-soft)';
   }
 
