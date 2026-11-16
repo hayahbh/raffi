@@ -1,0 +1,21 @@
+const {chromium}=require('playwright');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:820,height:1100}});const p=await ctx.newPage();
+const errs=[];p.on('pageerror',e=>errs.push(e.message));p.on('dialog',d=>d.accept());let n=0;
+await ctx.route('**/*',r=>{const u=r.request().url();
+ if(u.includes('supabase.min.js'))return r.fulfill({body:fs.readFileSync('test/fake-supabase.js','utf8'),contentType:'text/javascript'});
+ if(u.includes('googleapis.com/books')){n++; const q=decodeURIComponent(u.split('q=')[1]||'').replace(/\+/g,' ');
+   const t=q.replace(/^isbn:/,'').split(' ').slice(0,3).join(' ');
+   return r.fulfill({body:JSON.stringify({items:[{volumeInfo:{title:t,authors:['Someone'],publisher:'Pub',pageCount:100,imageLinks:{thumbnail:'http://books.google.com/x.jpg'}}}]}),contentType:'application/json',headers:{'access-control-allow-origin':'*'}});}
+ if(u.includes('books.google.com/x.jpg'))return r.fulfill({body:fs.readFileSync('icon-navy.png'),contentType:'image/png',headers:{'access-control-allow-origin':'*'}});
+ if(u.startsWith('file:'))return r.continue(); if(u.includes('xlsx'))return r.fulfill({body:'',contentType:'text/javascript'}); return r.abort();});
+await p.goto('file://'+process.cwd()+'/index.html');await p.waitForTimeout(500);
+await p.fill('#login-overlay input[type=email]','h@x.com');await p.fill('#login-overlay input[type=password]','secret123');await p.click('#login-overlay .btn');await p.waitForTimeout(800);
+await p.click('.tab >> text=إحصائياتي');await p.waitForTimeout(300);
+const [fc]=await Promise.all([p.waitForEvent('filechooser'), p.click('text=استعادة من ملف')]);await fc.setFiles('/home/claude/raffi-private/raffi-import.json');await p.waitForTimeout(8000);
+await p.evaluate(()=>{const o=document.getElementById('series-overlay'); if(o) o.remove();}); await p.click('text=دوّري على الناقص');await p.waitForTimeout(300);
+console.log(await p.$eval('#enrich-overlay',e=>e.innerText.slice(0,200)));
+await p.click('#enrich-overlay >> text=ابدئي');await p.waitForTimeout(3000);
+console.log(await p.$eval('#enrich-overlay',e=>e.innerText.slice(0,500)));
+await p.click('text=احفظي المختار');await p.waitForTimeout(3000);
+const d=await p.evaluate(()=>{const d=JSON.parse(localStorage.getItem('__fakedb'));return {nocover:d.rows.books.filter(b=>!b.cover_path).map(b=>b.title), files:Object.keys(d.files).length}});
+console.log(d, 'google calls', n);console.log(errs);await b.close();})();

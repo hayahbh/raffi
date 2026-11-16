@@ -56,3 +56,10 @@ a = "      h('label', {}, ['اسم الكتاب *']), f.title,\n      (function(
 if a in s and 'عبّي المعلومات من النت' not in s:
     s = s.replace(a, open(R + 'fill-button.txt').read(), 1)
 open(out, 'w').write(s)
+# تكميل المعلومات الناقصة
+s = open(out).read()
+if 'function openEnrichTool' not in s:
+    s = s.replace("  doSave = function(){ saveView(); cloudSave(); };", open(R+'enrich.js').read() + "  doSave = function(){ saveView(); cloudSave(); };", 1)
+    a = "    wrap.appendChild(h('div', {class:'card'}, [\n      h('h2', {}, ['نسخة احتياطية']),"
+    s = s.replace(a, open(R+'enrich-card.txt').read() + a, 1)
+open(out, 'w').write(s)
