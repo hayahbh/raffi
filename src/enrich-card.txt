@@ -1,5 +1,5 @@
     wrap.appendChild(h('div', {class:'card'}, [
       h('h2', {}, ['كمّلي المعلومات الناقصة']),
       h('p', {class:'datalist-note'}, ['يدوّر في النت على الأغلفة والمعلومات الناقصة لكتبك وأمنياتك، ويوريك اللي لقيه عشان تتأكدين قبل الحفظ.']),
-      h('button', {class:'btn', onclick:openEnrichTool}, ['🔎 دوّري على الناقص'])
+      h('div', {class:'actions-row'}, [h('button', {class:'btn', onclick:openEnrichTool}, ['🔎 دوّري على الناقص']), h('button', {class:'btn secondary', onclick:openCoverUpgrade}, ['🖼️ أغلفة بأعلى جودة'])])
     ]));

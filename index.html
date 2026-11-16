@@ -1464,6 +1464,49 @@
       });
       return;
     }
+    if(shelfGroupBy === 'series'){
+      function seriesKey(b){
+        if(b.seriesName && b.seriesName.trim()) return b.seriesName.trim();
+        var m = String(b.title||'').match(/^(.+?)\s*(?:#|vol\.?\s*|volume\s+|الجزء\s*|ج\s*)\d+/i);
+        return m ? m[1].replace(/[\s:,،-]+$/, '').trim() : '';
+      }
+      function volOf(b){
+        if(b.seriesIndex) return Number(b.seriesIndex);
+        var m = String(b.title||'').match(/(?:#|vol\.?\s*|volume\s+|الجزء\s*|ج\s*)(\d+)/i);
+        return m ? Number(m[1]) : 9999;
+      }
+      var sg = {}, names = {}, loose = [];
+      filtered.forEach(function(b){
+        var k = seriesKey(b);
+        if(!k){ loose.push(b); return; }
+        var nk = normalizeAr(k).toLowerCase();
+        (sg[nk] = sg[nk] || []).push(b); names[nk] = names[nk] || k;
+      });
+      var keys = Object.keys(sg).sort(function(a, c){ return sg[c].length - sg[a].length || names[a].localeCompare(names[c]); });
+      if(!keys.length && !loose.length){ container.appendChild(h('div', {class:'shelf empty'}, ['لا يوجد كتب تطابق البحث'])); return; }
+      var singles = [];
+      keys = keys.filter(function(k){ if(sg[k].length===1 && !sg[k][0].followSeries){ singles.push(sg[k][0]); return false; } return true; });
+      keys.forEach(function(k){
+        var list = sg[k].slice().sort(function(a, c){ return volOf(a) - volOf(c); });
+        var follow = list.some(function(b){ return b.followSeries; });
+        var row = h('div', {class:'shelf'}, []);
+        list.forEach(function(b){ row.appendChild(renderBookCard(b)); });
+        container.appendChild(h('div', {class:'shelf-section'}, [
+          h('h2', {}, [names[k], follow ? ' 🔔' : '', h('span', {class:'shelf-count'}, ['  (' + list.length + ')'])]), row
+        ]));
+      });
+      if(singles.length){
+        var srow = h('div', {class:'shelf'}, []);
+        singles.forEach(function(b){ srow.appendChild(renderBookCard(b)); });
+        container.appendChild(h('div', {class:'shelf-section'}, [h('h2', {}, ['سلاسل عندك منها جزء واحد', h('span', {class:'shelf-count'}, ['  (' + singles.length + ')'])]), srow]));
+      }
+      if(loose.length){
+        var lrow = h('div', {class:'shelf'}, []);
+        loose.forEach(function(b){ lrow.appendChild(renderBookCard(b)); });
+        container.appendChild(h('div', {class:'shelf-section'}, [h('h2', {}, ['كتب مفردة', h('span', {class:'shelf-count'}, ['  (' + loose.length + ')'])]), lrow]));
+      }
+      return;
+    }
     if(shelfGroupBy === 'desire'){
       DESIRE_ORDER.forEach(function(lvl){
         var list = filtered.filter(function(b){ return (b.desire||0)===lvl; });
@@ -1508,7 +1551,7 @@
     var groupToggle = h('div', {class:'status-row', style:'margin-top:10px;'}, []);
     function buildGroupToggle(){
       groupToggle.innerHTML = '';
-      [{key:'genre', label:'حسب النوع'}, {key:'status', label:'حسب الحالة'}, {key:'desire', label:'حسب الرغبة'}].forEach(function(o){
+      [{key:'genre', label:'حسب النوع'}, {key:'status', label:'حسب الحالة'}, {key:'desire', label:'حسب الرغبة'}, {key:'series', label:'حسب السلسلة'}].forEach(function(o){
         groupToggle.appendChild(h('button', {class:'status-chip' + (shelfGroupBy===o.key?' active':''), onclick:function(){
           shelfGroupBy = o.key;
           buildGroupToggle();
@@ -2072,14 +2115,14 @@
     reader.onload = function(e){
       var img = new Image();
       img.onload = function(){
-        var maxW = 200;
+        var maxW = 700;
         var scale = Math.min(1, maxW/img.width);
         var w = Math.max(1, Math.round(img.width*scale)), hh = Math.max(1, Math.round(img.height*scale));
         var canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = hh;
         canvas.getContext('2d').drawImage(img,0,0,w,hh);
-        var out = canvas.toDataURL('image/webp', 0.74);
-        if(out.indexOf('data:image/webp')!==0) out = canvas.toDataURL('image/jpeg', 0.72);
+        var out = canvas.toDataURL('image/webp', 0.82);
+        if(out.indexOf('data:image/webp')!==0) out = canvas.toDataURL('image/jpeg', 0.85);
         cb(out);
       };
       img.src = e.target.result;
@@ -2276,6 +2319,7 @@
       renderBookmarkStylePicker(b),
       h('div', {class:'review-cover'}, [cover, renderBookmarkBlock(b, sessions)]),
       h('div', {style:'text-align:center;'}, [coverBtn, coverFileInput]),
+      h('div', {style:'text-align:center; margin-top:6px;'}, [h('button', {class:'btn ghost small', onclick:function(){ openItemLookup(b, false, function(){ closeOverlay('detail-overlay'); openBookDetail(b.id); }); }}, ['🔎 دوّري على الناقص أو غلاف أوضح'])]),
       statusRow,
       h('div', {class:'review-block'}, [
         h('h3', {}, ['قد إيش متحمسة تقرينه؟']),
@@ -3237,7 +3281,7 @@
     wrap.appendChild(h('div', {class:'card'}, [
       h('h2', {}, ['كمّلي المعلومات الناقصة']),
       h('p', {class:'datalist-note'}, ['يدوّر في النت على الأغلفة والمعلومات الناقصة لكتبك وأمنياتك، ويوريك اللي لقيه عشان تتأكدين قبل الحفظ.']),
-      h('button', {class:'btn', onclick:openEnrichTool}, ['🔎 دوّري على الناقص'])
+      h('div', {class:'actions-row'}, [h('button', {class:'btn', onclick:openEnrichTool}, ['🔎 دوّري على الناقص']), h('button', {class:'btn secondary', onclick:openCoverUpgrade}, ['🖼️ أغلفة بأعلى جودة'])])
     ]));
     wrap.appendChild(h('div', {class:'card'}, [
       h('h2', {}, ['نسخة احتياطية']),
@@ -3564,6 +3608,7 @@
       h('div', {class:'modal-head'}, [h('h2', {}, [item.title]), h('button', {class:'icon-btn', onclick:function(){ closeOverlay('shop-detail-overlay'); }}, ['✕'])]),
       h('div', {class:'review-cover'}, [coverBox]),
       h('div', {style:'text-align:center;'}, [coverBtn, coverFileInput]),
+      h('div', {style:'text-align:center; margin-top:6px;'}, [h('button', {class:'btn ghost small', onclick:function(){ openItemLookup(item, true, function(){ closeOverlay('shop-detail-overlay'); openShoppingItemDetailModal(item); }); }}, ['🔎 دوّري على الناقص أو غلاف أوضح'])]),
 
       h('div', {class:'review-block'}, [
         h('h3', {}, ['بيانات الكتاب']),
@@ -4282,6 +4327,166 @@
       body
     ]);
     document.body.appendChild(h('div', {id:'enrich-overlay', class:'overlay'}, [modal]));
+  }
+
+  /* ---------- تحديث الأغلفة لأعلى جودة ---------- */
+  function imgSize(url){
+    return new Promise(function(res){
+      if(!url) return res(0);
+      var im = new Image(), done = false;
+      var t = setTimeout(function(){ if(!done){ done = true; res(0); } }, 15000);
+      im.onload = function(){ if(done) return; done = true; clearTimeout(t); res(im.naturalWidth || 0); };
+      im.onerror = function(){ if(done) return; done = true; clearTimeout(t); res(0); };
+      im.src = url;
+    });
+  }
+  function bigGoogle(url){
+    if(!url || url.indexOf('books.google') === -1) return url;
+    return url.replace(/&zoom=\d/, '&zoom=1').replace(/&fife=[^&]*/, '') + '&fife=w800';
+  }
+  function coverCandidates(item){
+    var c = [];
+    var isbn = String(item.isbn || '').replace(/[^0-9X]/gi, '');
+    if(isbn) c.push('https://covers.openlibrary.org/b/isbn/' + isbn + '-L.jpg?default=false');
+    var q = (item.title + ' ' + (item.author && /[؀-ۿ]/.test(item.author) === /[؀-ۿ]/.test(item.title) ? item.author : '')).trim();
+    return webBookSearch(q).catch(function(){ return []; }).then(function(list){
+      list.forEach(function(b){
+        if(titleMatch(item.title, b.title) < 2) return;
+        if(b.coverUrl){ c.push(bigGoogle(b.coverUrl)); if(b.coverUrl.indexOf('-M.jpg') !== -1) c.push(b.coverUrl.replace('-M.jpg', '-L.jpg')); }
+        if(b.isbn && !isbn) c.push('https://covers.openlibrary.org/b/isbn/' + b.isbn + '-L.jpg?default=false');
+      });
+      return c.filter(function(u, i){ return c.indexOf(u) === i; }).slice(0, 5);
+    });
+  }
+  function bestCoverFor(item){
+    return Promise.all([imgSize(item.cover), coverCandidates(item)]).then(function(r){
+      var cur = r[0], cands = r[1];
+      return Promise.all(cands.map(imgSize)).then(function(sizes){
+        var best = null, bw = 0;
+        sizes.forEach(function(w, i){ if(w > bw){ bw = w; best = cands[i]; } });
+        /* نقترح بس إذا الجديد أوضح بفرق واضح */
+        if(!best || bw < 300 || bw < cur * 1.4) return null;
+        return {url:best, width:bw, cur:cur};
+      });
+    }).catch(function(){ return null; });
+  }
+  function openCoverUpgrade(){
+    var items = STATE.books.map(function(b){ return {item:b, wish:false}; }).concat(STATE.shoppingList.map(function(s){ return {item:s, wish:true}; }));
+    closeOverlay('covers-overlay');
+    var body = h('div', {}, []);
+    var stop = false;
+    var prog = h('p', {class:'datalist-note'}, [items.length + ' كتاب. أدوّر لكل واحد على غلاف أوضح من اللي عندك، وأوريك القديم والجديد جنب بعض عشان تختارين. الكتب اللي ما ألقى لها أوضح ما أقترب منها.']);
+    var startBtn = h('button', {class:'btn', onclick:run}, ['ابدئي']);
+    body.appendChild(prog); body.appendChild(h('div', {class:'actions-row'}, [startBtn]));
+    function run(){
+      startBtn.remove();
+      var results = h('div', {}, []);
+      var applyBtn = h('button', {class:'btn', disabled:true, onclick:apply}, ['احفظي المختار']);
+      body.appendChild(results); body.appendChild(h('div', {class:'actions-row'}, [applyBtn]));
+      var found = [], done = 0, next = 0;
+      function worker(){
+        if(stop || next >= items.length) return Promise.resolve();
+        var x = items[next++];
+        return bestCoverFor(x.item).then(function(r){
+          done++;
+          prog.textContent = 'أدوّر… ' + done + '/' + items.length + ' · لقيت أوضح لـ ' + (found.length + (r ? 1 : 0));
+          if(!r) return;
+          var cb = h('input', {type:'checkbox'}); cb.checked = true;
+          found.push({x:x, url:r.url, cb:cb});
+          var box = 'width:60px;height:88px;object-fit:cover;border-radius:3px;flex:none;';
+          results.appendChild(h('label', {class:'rating-list-item', style:'display:flex; gap:10px; align-items:center; cursor:pointer;'}, [
+            cb,
+            x.item.cover ? h('img', {src:x.item.cover, style:box + 'opacity:.75;'}) : h('div', {style:box + 'background:var(--shelf);'}, []),
+            h('span', {style:'color:var(--ink-soft);'}, ['←']),
+            h('img', {src:r.url, style:box}),
+            h('div', {style:'flex:1;'}, [
+              h('div', {style:'font-weight:700; font-size:13.5px;'}, [x.item.title + (x.wish ? ' (الأمنيات)' : '')]),
+              h('div', {style:'font-size:11.5px; color:var(--ink-soft);'}, [(r.cur ? 'القديم ' + r.cur + 'px' : 'بدون غلاف') + ' ← الجديد ' + r.width + 'px'])
+            ])
+          ]));
+          applyBtn.disabled = false;
+        }).then(worker);
+      }
+      Promise.all([worker(), worker(), worker()]).then(function(){
+        prog.textContent = 'خلصت: لقيت غلاف أوضح لـ ' + found.length + ' من ' + items.length + '. شيلي ✓ عن أي غلاف مو نفس نسختك.';
+      });
+      function apply(){
+        var chosen = found.filter(function(f){ return f.cb.checked; });
+        if(!chosen.length){ toast('ما اخترتِ شي'); return; }
+        applyBtn.disabled = true;
+        var i = 0;
+        var chain = Promise.resolve();
+        chosen.forEach(function(f){
+          chain = chain.then(function(){ return new Promise(function(res){
+            urlToCover(f.url, function(d){ f.data = d; i++; prog.textContent = 'أجهّز الأغلفة ' + i + '/' + chosen.length; res(); });
+          }); });
+        });
+        chain.then(function(){
+          mutate(function(){ chosen.forEach(function(f){ f.x.item.cover = f.data; }); });
+          closeOverlay('covers-overlay');
+          toast('تحدّث ' + chosen.length + ' غلاف ✓');
+        });
+      }
+    }
+    var modal = h('div', {class:'modal'}, [
+      h('div', {class:'modal-head'}, [h('h2', {}, ['أغلفة بأعلى جودة']), h('button', {class:'icon-btn', onclick:function(){ stop = true; closeOverlay('covers-overlay'); }}, ['✕'])]),
+      body
+    ]);
+    document.body.appendChild(h('div', {id:'covers-overlay', class:'overlay'}, [modal]));
+  }
+
+  /* ---------- من صفحة الكتاب: دوّري على الناقص أو غلاف أوضح ---------- */
+  function openItemLookup(item, wish, reopen){
+    closeOverlay('lookup-overlay');
+    var body = h('div', {}, [h('p', {class:'empty-hint'}, ['أدوّر في النت… (ثواني)'])]);
+    var modal = h('div', {class:'modal'}, [
+      h('div', {class:'modal-head'}, [h('h2', {}, ['دوّري على الناقص']), h('button', {class:'icon-btn', onclick:function(){ closeOverlay('lookup-overlay'); }}, ['✕'])]),
+      body
+    ]);
+    document.body.appendChild(h('div', {id:'lookup-overlay', class:'overlay', onclick:function(e){ if(e.target.id==='lookup-overlay') closeOverlay('lookup-overlay'); }}, [modal]));
+    Promise.all([enrichOne(item), bestCoverFor(item)]).then(function(r){
+      var info = r[0], cov = r[1], rows = [], picks = [];
+      body.innerHTML = '';
+      var coverUrl = cov ? cov.url : (!item.cover && info && info.book.coverUrl ? info.book.coverUrl : null);
+      if(coverUrl){
+        var cb = h('input', {type:'checkbox'}); cb.checked = true;
+        picks.push({key:'cover', val:coverUrl, cb:cb});
+        var box = 'width:70px;height:102px;object-fit:cover;border-radius:3px;';
+        rows.push(h('label', {class:'rating-list-item', style:'display:flex; gap:10px; align-items:center; cursor:pointer;'}, [
+          cb, item.cover ? h('img', {src:item.cover, style:box + 'opacity:.75;'}) : h('div', {style:box + 'background:var(--shelf);'}, []),
+          h('span', {style:'color:var(--ink-soft);'}, ['←']), h('img', {src:coverUrl, style:box}),
+          h('div', {style:'font-size:12px; color:var(--ink-soft);'}, [cov ? ((cov.cur ? 'القديم ' + cov.cur + 'px' : 'بدون غلاف') + ' ← الجديد ' + cov.width + 'px') : 'غلاف من النت'])
+        ]));
+      }
+      if(info){
+        var b = info.book;
+        ENRICH_FIELDS.forEach(function(f){
+          if(item[f[1]] || !b[f[0]]) return;
+          if(wish && (f[1]==='totalPages' || f[1]==='synopsis' || f[1]==='publisher')) return;
+          var cb2 = h('input', {type:'checkbox'}); cb2.checked = info.score >= 2;
+          picks.push({key:f[1], val:b[f[0]], cb:cb2});
+          rows.push(h('label', {class:'rating-list-item', style:'display:flex; gap:10px; align-items:flex-start; cursor:pointer;'}, [
+            cb2, h('div', {style:'flex:1;'}, [h('div', {style:'font-size:12px; color:var(--ink-soft);'}, [f[2]]), h('div', {style:'font-size:13.5px;'}, [String(b[f[0]])])])
+          ]));
+        });
+        if(rows.length) body.appendChild(h('p', {class:'datalist-note'}, ['لقيت: ' + b.title + (b.author ? ' · ' + b.author : '') + (info.score < 2 ? ' — تأكّدي، ممكن مو نفس الكتاب' : '')]));
+      }
+      if(!rows.length){ body.appendChild(h('p', {class:'empty-hint'}, ['ما لقيت شي ناقص أو غلاف أوضح من اللي عندك.'])); return; }
+      rows.forEach(function(r2){ body.appendChild(r2); });
+      var saveBtn = h('button', {class:'btn', onclick:function(){
+        var chosen = picks.filter(function(p){ return p.cb.checked; });
+        if(!chosen.length){ toast('ما اخترتِ شي'); return; }
+        saveBtn.disabled = true;
+        var c = chosen.filter(function(p){ return p.key==='cover'; })[0];
+        (c ? new Promise(function(res){ urlToCover(c.val, function(d){ c.val = d; res(); }); }) : Promise.resolve()).then(function(){
+          mutate(function(){ chosen.forEach(function(p){ item[p.key] = p.key==='totalPages' ? Number(p.val)||0 : p.val; }); });
+          closeOverlay('lookup-overlay');
+          toast('تحدّث ✓');
+          if(reopen) reopen();
+        });
+      }}, ['احفظي المختار']);
+      body.appendChild(h('div', {class:'actions-row'}, [saveBtn]));
+    });
   }
 
   doSave = function(){ saveView(); cloudSave(); };

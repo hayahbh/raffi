@@ -1,0 +1,43 @@
+    if(shelfGroupBy === 'series'){
+      function seriesKey(b){
+        if(b.seriesName && b.seriesName.trim()) return b.seriesName.trim();
+        var m = String(b.title||'').match(/^(.+?)\s*(?:#|vol\.?\s*|volume\s+|الجزء\s*|ج\s*)\d+/i);
+        return m ? m[1].replace(/[\s:,،-]+$/, '').trim() : '';
+      }
+      function volOf(b){
+        if(b.seriesIndex) return Number(b.seriesIndex);
+        var m = String(b.title||'').match(/(?:#|vol\.?\s*|volume\s+|الجزء\s*|ج\s*)(\d+)/i);
+        return m ? Number(m[1]) : 9999;
+      }
+      var sg = {}, names = {}, loose = [];
+      filtered.forEach(function(b){
+        var k = seriesKey(b);
+        if(!k){ loose.push(b); return; }
+        var nk = normalizeAr(k).toLowerCase();
+        (sg[nk] = sg[nk] || []).push(b); names[nk] = names[nk] || k;
+      });
+      var keys = Object.keys(sg).sort(function(a, c){ return sg[c].length - sg[a].length || names[a].localeCompare(names[c]); });
+      if(!keys.length && !loose.length){ container.appendChild(h('div', {class:'shelf empty'}, ['لا يوجد كتب تطابق البحث'])); return; }
+      var singles = [];
+      keys = keys.filter(function(k){ if(sg[k].length===1 && !sg[k][0].followSeries){ singles.push(sg[k][0]); return false; } return true; });
+      keys.forEach(function(k){
+        var list = sg[k].slice().sort(function(a, c){ return volOf(a) - volOf(c); });
+        var follow = list.some(function(b){ return b.followSeries; });
+        var row = h('div', {class:'shelf'}, []);
+        list.forEach(function(b){ row.appendChild(renderBookCard(b)); });
+        container.appendChild(h('div', {class:'shelf-section'}, [
+          h('h2', {}, [names[k], follow ? ' 🔔' : '', h('span', {class:'shelf-count'}, ['  (' + list.length + ')'])]), row
+        ]));
+      });
+      if(singles.length){
+        var srow = h('div', {class:'shelf'}, []);
+        singles.forEach(function(b){ srow.appendChild(renderBookCard(b)); });
+        container.appendChild(h('div', {class:'shelf-section'}, [h('h2', {}, ['سلاسل عندك منها جزء واحد', h('span', {class:'shelf-count'}, ['  (' + singles.length + ')'])]), srow]));
+      }
+      if(loose.length){
+        var lrow = h('div', {class:'shelf'}, []);
+        loose.forEach(function(b){ lrow.appendChild(renderBookCard(b)); });
+        container.appendChild(h('div', {class:'shelf-section'}, [h('h2', {}, ['كتب مفردة', h('span', {class:'shelf-count'}, ['  (' + loose.length + ')'])]), lrow]));
+      }
+      return;
+    }

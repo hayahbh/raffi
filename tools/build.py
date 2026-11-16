@@ -63,3 +63,26 @@ if 'function openEnrichTool' not in s:
     a = "    wrap.appendChild(h('div', {class:'card'}, [\n      h('h2', {}, ['نسخة احتياطية']),"
     s = s.replace(a, open(R+'enrich-card.txt').read() + a, 1)
 open(out, 'w').write(s)
+# أغلفة بأعلى جودة + حجم أكبر للأغلفة
+s = open(out).read()
+if 'function openCoverUpgrade' not in s:
+    s = s.replace("  doSave = function(){ saveView(); cloudSave(); };", open(R+'covers.js').read() + "  doSave = function(){ saveView(); cloudSave(); };", 1)
+s = s.replace("        var maxW = 200;", "        var maxW = 700;", 1)
+s = s.replace("canvas.toDataURL('image/webp', 0.74);\n        if(out.indexOf('data:image/webp')!==0) out = canvas.toDataURL('image/jpeg', 0.72);", "canvas.toDataURL('image/webp', 0.82);\n        if(out.indexOf('data:image/webp')!==0) out = canvas.toDataURL('image/jpeg', 0.85);", 1)
+open(out, 'w').write(s)
+# زر «دوّري على الناقص» في صفحة الكتاب
+s = open(out).read()
+if 'function openItemLookup' not in s:
+    s = s.replace("  doSave = function(){ saveView(); cloudSave(); };", open(R+'lookup-one.js').read() + "  doSave = function(){ saveView(); cloudSave(); };", 1)
+    a1 = "      h('div', {class:'review-cover'}, [cover, renderBookmarkBlock(b, sessions)]),\n      h('div', {style:'text-align:center;'}, [coverBtn, coverFileInput]),"
+    s = s.replace(a1, a1 + "\n      h('div', {style:'text-align:center; margin-top:6px;'}, [h('button', {class:'btn ghost small', onclick:function(){ openItemLookup(b, false, function(){ closeOverlay('detail-overlay'); openBookDetail(b.id); }); }}, ['🔎 دوّري على الناقص أو غلاف أوضح'])]),", 1)
+    a2 = "      h('div', {class:'review-cover'}, [coverBox]),\n      h('div', {style:'text-align:center;'}, [coverBtn, coverFileInput]),"
+    s = s.replace(a2, a2 + "\n      h('div', {style:'text-align:center; margin-top:6px;'}, [h('button', {class:'btn ghost small', onclick:function(){ openItemLookup(item, true, function(){ closeOverlay('shop-detail-overlay'); openShoppingItemDetailModal(item); }); }}, ['🔎 دوّري على الناقص أو غلاف أوضح'])]),", 1)
+open(out, 'w').write(s)
+# رف لكل سلسلة
+s = open(out).read()
+if "shelfGroupBy === 'series'" not in s:
+    a = "    if(shelfGroupBy === 'desire'){\n      DESIRE_ORDER.forEach(function(lvl){"
+    s = s.replace(a, open(R+'series-shelf.txt').read() + a, 1)
+    s = s.replace("{key:'desire', label:'حسب الرغبة'}]", "{key:'desire', label:'حسب الرغبة'}, {key:'series', label:'حسب السلسلة'}]", 1)
+open(out, 'w').write(s)

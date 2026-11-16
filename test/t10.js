@@ -1,0 +1,20 @@
+const {chromium}=require('playwright');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:820,height:1100}});const p=await ctx.newPage();
+const errs=[];p.on('pageerror',e=>errs.push(e.message));p.on('dialog',d=>d.accept());
+await ctx.route('**/*',r=>{const u=r.request().url();
+ if(u.includes('supabase.min.js'))return r.fulfill({body:fs.readFileSync('test/fake-supabase.js','utf8'),contentType:'text/javascript'});
+ if(u.includes('googleapis.com/books')){ const q=decodeURIComponent(u.split('q=')[1]||'').replace(/\+/g,' ');
+   return r.fulfill({body:JSON.stringify({items:[{volumeInfo:{title:'Pulp',authors:['Ed Brubaker'],publisher:'Image',pageCount:72,description:'Noir.',imageLinks:{thumbnail:'http://books.google.com/books/content?id=1&zoom=1'}}}]}),contentType:'application/json',headers:{'access-control-allow-origin':'*'}});}
+ if(u.includes('books.google.com/books/content'))return r.fulfill({body:fs.readFileSync(u.includes('fife=w800')?'/tmp/big.png':'icon-navy.png'),contentType:'image/png',headers:{'access-control-allow-origin':'*'}});
+ if(u.includes('openlibrary'))return r.fulfill({status:404,body:''});
+ if(u.startsWith('file:'))return r.continue(); if(u.includes('xlsx'))return r.fulfill({body:'',contentType:'text/javascript'}); return r.abort();});
+await p.goto('file://'+process.cwd()+'/index.html');await p.waitForTimeout(500);
+await p.fill('#login-overlay input[type=email]','h@x.com');await p.fill('#login-overlay input[type=password]','secret123');await p.click('#login-overlay .btn');await p.waitForTimeout(800);
+await p.click('.fab');await p.waitForTimeout(300);await p.fill('#add-overlay input[type=text]','Pulp');await p.click('#add-overlay >> text=أضيفيه للرف');await p.waitForTimeout(1500);
+await p.evaluate(()=>{['series-overlay','celebrate-el'].forEach(i=>{const o=document.getElementById(i); if(o) o.remove();});});
+await p.click('.tab >> text=مكتبتي');await p.waitForTimeout(400);await p.click('.book-card');await p.waitForTimeout(500);
+await p.click('#detail-overlay >> text=دوّري على الناقص أو غلاف أوضح');await p.waitForTimeout(2500);
+console.log((await p.$eval('#lookup-overlay',e=>e.innerText)).replace(/\n+/g,' | '));
+await p.click('#lookup-overlay >> text=احفظي المختار');await p.waitForTimeout(2500);
+console.log(await p.evaluate(()=>JSON.parse(localStorage.getItem('__fakedb')).rows.books.map(b=>[b.title,b.author,b.publisher,b.total_pages,!!b.cover_path])));
+console.log('detail reopened', !!await p.$('#detail-overlay'), errs);await b.close();})();

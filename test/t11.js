@@ -1,0 +1,16 @@
+const {chromium}=require('playwright');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:820,height:1100}});const p=await ctx.newPage();
+const errs=[];p.on('pageerror',e=>errs.push(e.message));p.on('dialog',d=>d.accept());
+await ctx.route('**/*',r=>{const u=r.request().url();
+ if(u.includes('supabase.min.js'))return r.fulfill({body:fs.readFileSync('test/fake-supabase.js','utf8'),contentType:'text/javascript'});
+ if(u.startsWith('file:'))return r.continue(); if(u.includes('xlsx'))return r.fulfill({body:'',contentType:'text/javascript'}); return r.abort();});
+await p.goto('file://'+process.cwd()+'/index.html');await p.waitForTimeout(500);
+await p.fill('#login-overlay input[type=email]','h@x.com');await p.fill('#login-overlay input[type=password]','secret123');await p.click('#login-overlay .btn');await p.waitForTimeout(800);
+await p.click('.tab >> text=إحصائياتي');await p.waitForTimeout(300);
+const [fc]=await Promise.all([p.waitForEvent('filechooser'), p.click('text=استعادة من ملف')]);await fc.setFiles('/home/claude/raffi-private/raffi-import.json');await p.waitForTimeout(6000);
+await p.evaluate(()=>{['series-overlay','celebrate-el'].forEach(i=>{const o=document.getElementById(i); if(o) o.remove();});});
+await p.click('.tab >> text=مكتبتي');await p.waitForTimeout(400);
+await p.click('text=حسب السلسلة');await p.waitForTimeout(500);
+console.log(await p.$$eval('.shelf-section h2',x=>x.map(e=>e.textContent).slice(0,14)));
+await p.screenshot({path:'/tmp/series.png'});
+console.log(errs);await b.close();})();
