@@ -1,0 +1,4 @@
+const {chromium}=require('playwright');
+(async()=>{const b=await chromium.launch();const p=await b.newPage({viewport:{width:512,height:512}});
+await p.setContent(`<html><body style="margin:0;width:512px;height:512px;background:#3a121c;display:flex;align-items:center;justify-content:center"><svg viewBox="0 0 215 210" width="300" height="293"><path d="M12,107 C24,114 46,119 68,117 C88,114 120,92 129,72 C133,63 134,53 128,46 C116,34 96,21 85,14 C81,12 80,15 80,20 L80,64 C82,88 94,120 98,146 C101,166 103,180 102,190 C101,195 92,195 70,195 C59,195 56,187 56,176 L56,166 C56,146 70,133 92,125 C122,116 150,113 166,101 C177,93 182,86 186,76" fill="none" stroke="#d3ac6e" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" transform="translate(0,5)"/><circle cx="201" cy="67" r="8.5" fill="#d3ac6e"/></svg></body></html>`);
+await p.screenshot({path:'icon.png'});await b.close();})();

@@ -1,0 +1,4 @@
+*.json.bak
+test/*.png
+test/exported.json
+raffi-import.json

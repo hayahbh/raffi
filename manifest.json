@@ -1,0 +1,11 @@
+{
+  "name": "رفّي",
+  "short_name": "رفّي",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#3a121c",
+  "theme_color": "#3a121c",
+  "icons": [{"src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]
+}

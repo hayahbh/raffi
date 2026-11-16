@@ -1,0 +1,18 @@
+const {chromium}=require('playwright');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:820,height:1100},acceptDownloads:true});const p=await ctx.newPage();
+const errs=[];p.on('pageerror',e=>errs.push(e.message));p.on('dialog',d=>d.accept());
+await ctx.route('**/*',r=>{const u=r.request().url();
+ if(u.includes('supabase.min.js'))return r.fulfill({body:fs.readFileSync('test/fake-supabase.js','utf8'),contentType:'text/javascript'});
+ if(u.startsWith('file:'))return r.continue(); if(u.includes('xlsx'))return r.fulfill({body:'',contentType:'text/javascript'}); return r.abort();});
+await p.goto('file://'+process.cwd()+'/index.html');await p.waitForTimeout(500);
+await p.fill('#login-overlay input[type=email]','h@x.com');await p.fill('#login-overlay input[type=password]','secret123');await p.click('#login-overlay .btn');await p.waitForTimeout(800);
+await p.click('.tab >> text=إحصائياتي');await p.waitForTimeout(300);
+const [fc]=await Promise.all([p.waitForEvent('filechooser'), p.click('text=استعادة من ملف')]);await fc.setFiles('/home/claude/raffi-private/raffi-import.json');await p.waitForTimeout(12000);
+await p.reload();await p.waitForTimeout(2000);
+await p.click('.tab >> text=مكتبتي');await p.waitForTimeout(500);
+console.log('library cards', await p.$$eval('.book-card',x=>x.length));
+await p.screenshot({path:'test/lib.png'});
+await p.click('.tab >> text=إحصائياتي');await p.waitForTimeout(300);
+const [dl]=await Promise.all([p.waitForEvent('download'), p.click('text=حفظ نسخة احتياطية')]);
+await dl.saveAs('test/exported.json');
+console.log(errs);await b.close();})();

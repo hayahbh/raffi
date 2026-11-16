@@ -1,0 +1,28 @@
+const {chromium}=require('playwright');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:820,height:1100}});const p=await ctx.newPage();
+const errs=[];p.on('pageerror',e=>errs.push(e.message));p.on('console',m=>{if(m.type()==='error'||m.type()==='warning')errs.push('console '+m.text())});
+p.on('dialog',d=>d.accept());
+await ctx.route('**/*',r=>{const u=r.request().url();
+ if(u.includes('supabase.min.js'))return r.fulfill({body:fs.readFileSync('test/fake-supabase.js','utf8'),contentType:'text/javascript'});
+ if(u.startsWith('file:'))return r.continue(); if(u.includes('xlsx'))return r.fulfill({body:'',contentType:'text/javascript'}); return r.abort();});
+await p.goto('file://'+process.cwd()+'/index.html');await p.waitForTimeout(800);
+console.log('login shown', !!await p.$('#login-overlay'));
+await p.screenshot({path:'test/login.png'});
+await p.fill('#login-overlay input[type=email]','h@x.com');await p.fill('#login-overlay input[type=password]','secret123');
+await p.click('#login-overlay .btn');await p.waitForTimeout(1000);
+console.log('after login overlay', !!await p.$('#login-overlay'), 'tabs', await p.$$eval('.tab',x=>x.length));
+// restore
+const tabs=await p.$$eval('.tab',x=>x.map(t=>t.textContent));console.log(tabs);
+const restoreBtn = async()=>{ for(const t of await p.$$('.tab')){ await t.click(); await p.waitForTimeout(200); const btn=await p.$('text=استعادة من ملف'); if(btn) return btn; } };
+await p.click('.tab >> text=إحصائياتي'); await p.waitForTimeout(400); const btn=await p.$('text=استعادة من ملف');
+console.log('restore btn', !!btn);
+const [fc]=await Promise.all([p.waitForEvent('filechooser'), btn.click()]);
+await fc.setFiles('/home/claude/raffi-private/raffi-import.json');
+await p.waitForTimeout(15000);
+const st=await p.evaluate(()=>{const d=JSON.parse(localStorage.getItem('__fakedb'));const o={};for(const k in d.rows)o[k]=d.rows[k].length;o.files=Object.keys(d.files).length;return o;});
+console.log('db',st);
+await p.reload();await p.waitForTimeout(2500);
+const books=await p.$$eval('.book-card',x=>x.length);console.log('books on shelves after reload',books);
+await p.screenshot({path:'test/home.png'});
+console.log('calls after reload', await p.evaluate(()=>window.__calls.length));
+console.log(errs.slice(0,10));await b.close();})();
