@@ -142,9 +142,15 @@
     if(gone.length) ops.push(sb.from(t).delete().in(key, gone).then(function(r){ if(r.error) throw r.error; }));
     return Promise.all(ops).then(function(){ synced[t] = next; });
   }
-  var syncing = null, syncAgain = false, coverFails = [];
+  var syncing = null, syncAgain = false, coverFails = [], dirty = false;
+  function isNetErr(err){
+    var m = String((err && (err.message || err.name)) || err || '');
+    return !navigator.onLine || /fetch|network|load failed|timed? ?out|offline/i.test(m);
+  }
   function cloudSave(){
     if(!cloudUser) return;
+    dirty = true; saveLocal();
+    if(!navigator.onLine || !authReady){ setSyncBadge('offline'); return; }
     if(syncing){ syncAgain = true; return; }
     setSyncBadge('saving');
     syncing = Promise.resolve().then(function(){
@@ -158,16 +164,54 @@
         return Promise.all(['sessions','wishlist','mood_log','goals','favorite_authors','user_settings'].map(function(t){ return syncTable(t, rows[t]); }));
       });
     }).then(function(){
-      if(coverFails.length) setSyncBadge('error', 'الكتب انحفظت، بس ' + coverFails.length + ' غلاف ما انرفع: ' + coverFails[0]);
-      else setSyncBadge('ok');
+      if(coverFails.length && !coverFails.every(isNetErr)) setSyncBadge('error', 'الكتب انحفظت، بس ' + coverFails.length + ' غلاف ما انرفع: ' + coverFails[0]);
+      else if(coverFails.length) setSyncBadge('offline');
+      else { dirty = false; setSyncBadge('ok'); }
+      saveLocal();
     }, function(err){
-      console.warn('sync failed', err); setSyncBadge('error', (err && (err.message || err.details || err.hint)) || String(err));
+      console.warn('sync failed', err);
+      if(isNetErr(err)) setSyncBadge('offline');
+      else setSyncBadge('error', (err && (err.message || err.details || err.hint)) || String(err));
+      saveLocal();
     }).then(function(){
       syncing = null;
       if(syncAgain){ syncAgain = false; cloudSave(); }
     });
+    return syncing;
   }
+  window.addEventListener('online', function(){ if(dirty && cloudUser) cloudSave(); });
   window.addEventListener('beforeunload', function(e){ if(syncing){ e.preventDefault(); e.returnValue = ''; } });
+
+  /* --- نسخة على الجهاز عشان رفّي يفتح بدون نت --- */
+  var idb = null;
+  function idbOpen(){
+    if(idb) return idb;
+    idb = new Promise(function(res, rej){
+      var r = indexedDB.open('raffi', 1);
+      r.onupgradeneeded = function(){ r.result.createObjectStore('kv'); };
+      r.onsuccess = function(){ res(r.result); };
+      r.onerror = function(){ rej(r.error); };
+    });
+    return idb;
+  }
+  function idbDo(mode, fn){
+    return idbOpen().then(function(db){ return new Promise(function(res, rej){
+      var tx = db.transaction('kv', mode), st = tx.objectStore('kv'), out = fn(st);
+      tx.oncomplete = function(){ res(out && out.result); };
+      tx.onerror = function(){ rej(tx.error); };
+    }); });
+  }
+  var localTimer = null;
+  function saveLocal(){
+    clearTimeout(localTimer);
+    localTimer = setTimeout(function(){
+      if(!cloudUser) return;
+      var snap = {uid:cloudUser.id, state:JSON.stringify(STATE), synced:synced, dirty:dirty, t:Date.now()};
+      idbDo('readwrite', function(st){ return st.put(snap, 'cache'); }).catch(function(e){ console.warn('local save', e); });
+    }, 300);
+  }
+  function loadLocal(){ return idbDo('readonly', function(st){ return st.get('cache'); }).catch(function(){ return null; }); }
+  function clearLocal(){ return idbDo('readwrite', function(st){ return st.delete('cache'); }).catch(function(){}); }
 
   var syncBadge = null;
   function setSyncBadge(s, detail){
@@ -178,6 +222,7 @@
     clearTimeout(syncBadge._t);
     syncBadge.style.opacity = '1';
     if(s==='saving') syncBadge.textContent = detail || 'أحفظ…';
+    else if(s==='offline'){ syncBadge._err = false; syncBadge.textContent = 'محفوظ على جهازك، بيترفع لما يرجع النت'; syncBadge.style.color = 'var(--ink-soft)'; return; }
     else if(s==='ok'){ syncBadge.textContent = 'محفوظ ✓'; syncBadge._t = setTimeout(function(){ syncBadge.style.opacity = '0'; }, 1500); }
     else { syncBadge._err = true; syncBadge.textContent = 'ما انحفظ (اضغطي لإعادة المحاولة): ' + (detail||''); syncBadge.style.color = 'var(--danger)'; return; }
     syncBadge._err = false;
@@ -274,20 +319,65 @@
     closeOverlay('login-overlay');
     document.body.appendChild(box);
   }
-  function signOut(){ sb.auth.signOut().then(function(){ location.reload(); }); }
+  function signOut(){ clearLocal().then(function(){ return sb.auth.signOut(); }).then(function(){ location.reload(); }); }
 
   /* --- التشغيل --- */
-  var booted = false;
+  var booted = false, authReady = false;
+  function applyState(obj){
+    Object.keys(STATE).forEach(function(k){ delete STATE[k]; });
+    Object.keys(obj).forEach(function(k){ STATE[k] = obj[k]; });
+    STATE.books = STATE.books || []; STATE.sessions = STATE.sessions || []; STATE.goals = STATE.goals || [];
+    STATE.moodLog = STATE.moodLog || []; STATE.shoppingList = STATE.shoppingList || []; STATE.earnedBadgeIds = STATE.earnedBadgeIds || [];
+    STATE.favoriteAuthors = STATE.favoriteAuthors || []; STATE.favoriteBookIds = STATE.favoriteBookIds || [];
+    STATE.authorBios = STATE.authorBios || {}; STATE.settings = STATE.settings || {palette:'burgundy', hidden:[]};
+    STATE.settings.hidden = STATE.settings.hidden || [];
+  }
+  function refreshFromCloud(){
+    /* نرسل تعديلاتك اللي سويتيها بدون نت أول، بعدين نجيب أحدث نسخة */
+    var first = dirty ? (cloudSave() || Promise.resolve()) : Promise.resolve();
+    return first.then(function(){
+      if(dirty) return;
+      return cloudLoad().then(function(){ saveLocal(); if(booted) render(); });
+    });
+  }
   function startCloud(){
     var app = document.getElementById('app');
     if(app) app.innerHTML = '<p class="empty-hint" style="text-align:center;margin-top:40vh;">أفتح رفّك…</p>';
+    if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(function(){});
+    loadLocal().then(function(c){
+      if(c && c.state && c.uid){
+        try{ applyState(JSON.parse(c.state)); }catch(e){ c = null; }
+      }
+      if(c && c.uid){
+        synced = c.synced || {}; dirty = !!c.dirty; cloudUser = {id:c.uid};
+        booted = true; bootApp();
+        if(!navigator.onLine) setSyncBadge('offline');
+      }
+      listenAuth();
+    });
+  }
+  function listenAuth(){
     sb.auth.onAuthStateChange(function(ev, session){
       var u = session && session.user;
-      if(!u){ if(!booted) showLogin(); return; }
-      if(booted || (cloudUser && cloudUser.id===u.id)) return;
-      cloudUser = u;
+      if(!u){
+        if(!booted){ showLogin(navigator.onLine ? '' : 'أول مرة تدخلين لازم يكون فيه نت'); return; }
+        if(ev==='SIGNED_OUT' && navigator.onLine){ clearLocal().then(function(){ location.reload(); }); }
+        return;
+      }
+      if(authReady && cloudUser && cloudUser.id===u.id) return;
+      if(cloudUser && cloudUser.id!==u.id){ clearLocal(); synced = {}; dirty = false; }
+      var wasBooted = booted && cloudUser && cloudUser.id===u.id;
+      cloudUser = u; authReady = true;
       closeOverlay('login-overlay');
-      cloudLoad().then(function(){ booted = true; bootApp(); setTimeout(maybeCheckSeries, 4000); }, function(err){
+      if(wasBooted){
+        if(navigator.onLine) refreshFromCloud().then(function(){ setTimeout(maybeCheckSeries, 4000); }, function(e){ console.warn(e); });
+        return;
+      }
+      cloudLoad().then(function(){
+        saveLocal();
+        if(booted) render(); else { booted = true; bootApp(); }
+        setTimeout(maybeCheckSeries, 4000);
+      }, function(err){
         console.warn(err); showLogin('ما قدرت أفتح مكتبتك: ' + (err.message||err));
       });
     });

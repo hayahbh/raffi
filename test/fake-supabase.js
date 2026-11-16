@@ -6,8 +6,8 @@
   function q(t){
     var api = {
       _t:t,
-      select:function(){ return {range:function(a,b){ var d=db(); var r=(d.rows[t]||[]).slice().reverse().slice(a,b+1); return Promise.resolve({data:JSON.parse(JSON.stringify(r)), error:null}); }}; },
-      upsert:function(rows, opt){ window.__calls.push(['upsert',t,rows.length]); var d=db(); var keys=(opt&&opt.onConflict||'id').split(','); d.rows[t]=d.rows[t]||[];
+      select:function(){ return {range:function(a,b){ if(localStorage.getItem('__offline')) return Promise.resolve({data:null,error:{message:'Failed to fetch'}}); var d=db(); var r=(d.rows[t]||[]).slice().reverse().slice(a,b+1); return Promise.resolve({data:JSON.parse(JSON.stringify(r)), error:null}); }}; },
+      upsert:function(rows, opt){ if(localStorage.getItem('__offline')) return Promise.resolve({error:{message:'TypeError: Failed to fetch'}}); window.__calls.push(['upsert',t,rows.length]); var d=db(); var keys=(opt&&opt.onConflict||'id').split(','); d.rows[t]=d.rows[t]||[];
         rows.forEach(function(r){ r=JSON.parse(JSON.stringify(r)); if(!r.user_id) r.user_id=d.user.id;
           if(t==='books' && !r.title) throw new Error('null title');
           var i=d.rows[t].findIndex(function(x){ return keys.every(function(k){ return x[k]===r[k]; }); });
@@ -26,7 +26,7 @@
       signOut:function(){ var d=db(); d.user=null; save(d); return Promise.resolve({}); }
     },
     storage:{from:function(){ return {
-      upload:function(path, blob){ window.__calls.push(['upload',path]); var d=db(); d.files[path]=blob.size; save(d); return Promise.resolve({data:{path:path}, error:null}); },
+      upload:function(path, blob){ if(localStorage.getItem('__offline')) return Promise.resolve({error:{message:'Load failed'}}); window.__calls.push(['upload',path]); var d=db(); d.files[path]=blob.size; save(d); return Promise.resolve({data:{path:path}, error:null}); },
       remove:function(p){ var d=db(); p.forEach(function(x){ delete d.files[x]; }); save(d); return Promise.resolve({}); },
       createSignedUrls:function(paths){ return Promise.resolve({data:paths.map(function(p){ return {path:p, signedUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACw='}; })}); }
     }; }}
