@@ -74,7 +74,7 @@
     var blob = dataUrlToBlob(item.cover);
     var ext = blob.type==='image/webp' ? 'webp' : (blob.type==='image/png' ? 'png' : 'jpg');
     var path = cloudUser.id + '/' + item.id + '-' + Date.now().toString(36) + '.' + ext;
-    return sb.storage.from('covers').upload(path, blob, {contentType:blob.type, upsert:true}).then(function(r){
+    return withTimeout(sb.storage.from('covers').upload(path, blob, {contentType:blob.type, upsert:true}), 45000, 'رفع غلاف «' + (item.title||'') + '»').then(function(r){
       if(r.error) throw r.error;
       var old = item._coverPath;
       item._coverPath = path; item._coverSig = item.cover;
@@ -136,13 +136,19 @@
     var ops = [];
     if(changed.length){
       for(var i=0;i<changed.length;i+=200){
-        ops.push(sb.from(t).upsert(changed.slice(i,i+200), {onConflict: t==='favorite_authors' ? 'user_id,name' : key}).then(function(r){ if(r.error) throw r.error; }));
+        ops.push(withTimeout(sb.from(t).upsert(changed.slice(i,i+200), {onConflict: t==='favorite_authors' ? 'user_id,name' : key}), 60000, 'حفظ ' + t).then(function(r){ if(r.error) throw r.error; }));
       }
     }
-    if(gone.length) ops.push(sb.from(t).delete().in(key, gone).then(function(r){ if(r.error) throw r.error; }));
+    if(gone.length) ops.push(withTimeout(sb.from(t).delete().in(key, gone), 60000, 'حذف من ' + t).then(function(r){ if(r.error) throw r.error; }));
     return Promise.all(ops).then(function(){ synced[t] = next; });
   }
   var syncing = null, syncAgain = false, coverFails = [], dirty = false;
+  function withTimeout(pr, ms, what){
+    return new Promise(function(res, rej){
+      var t = setTimeout(function(){ rej(new Error('علّق: ' + what)); }, ms);
+      Promise.resolve(pr).then(function(v){ clearTimeout(t); res(v); }, function(e){ clearTimeout(t); rej(e); });
+    });
+  }
   function isNetErr(err){
     var m = String((err && (err.message || err.name)) || err || '');
     return !navigator.onLine || /fetch|network|load failed|timed? ?out|offline/i.test(m);
@@ -160,7 +166,9 @@
       coverFails = fails || [];
       var rows = buildRows();
       /* الكتب أول، بعدين اللي يعتمد عليها */
+      setSyncBadge('saving', 'أحفظ الكتب…');
       return syncTable('books', rows.books).then(function(){
+        setSyncBadge('saving', 'أحفظ الباقي…');
         return Promise.all(['sessions','wishlist','mood_log','goals','favorite_authors','user_settings'].map(function(t){ return syncTable(t, rows[t]); }));
       });
     }).then(function(){
