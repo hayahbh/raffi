@@ -5,7 +5,7 @@
   "dir": "rtl",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#3a121c",
-  "theme_color": "#3a121c",
+  "background_color": "#141c30",
+  "theme_color": "#141c30",
   "icons": [{"src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}]
 }
