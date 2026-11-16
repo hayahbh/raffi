@@ -32,7 +32,7 @@ rep("      f.synopsis.value = prefill.synopsis||''; f.seriesName.value = prefill
 # 5) cloud layer + boot
 cloud = open(R+'cloud.js').read()
 rep("  /* ---------- boot ---------- */\n  var restoredView = null;",
-    cloud + "\n  doSave = function(){ saveView(); cloudSave(); };\n\n  /* ---------- boot ---------- */\n  function bootApp(){\n  var restoredView = null;")
+    cloud + open(R+'series.js').read() + "\n  doSave = function(){ saveView(); cloudSave(); };\n\n  /* ---------- boot ---------- */\n  function bootApp(){\n  var restoredView = null;")
 rep("  setTimeout(checkBadges, 500);\n})();", "  setTimeout(checkBadges, 500);\n  }\n  startCloud();\n})();")
 # 6) sign out
 rep("h('button', {class:'btn secondary', onclick:restoreBackup}, ['استعادة من ملف'])",
@@ -42,3 +42,11 @@ rep('<title>رفّي</title>\n<link rel="preconnect"', '<title>رفّي</title>\
 assert 'claude.use(\'sample\')' not in s
 open(out, 'w').write(s)
 print('ok', len(s))
+# (أُضيفت لاحقًا) متابعة السلاسل
+s = open(out).read()
+for a, b in [
+  ("cloudLoad().then(function(){ booted = true; bootApp(); }", "cloudLoad().then(function(){ booted = true; bootApp(); setTimeout(maybeCheckSeries, 4000); }"),
+  ("      h('button', {class:'btn', onclick:openAddShoppingItemModal}, ['+ كتاب جديد للقائمة'])\n    ]));",
+   "      h('div', {class:'actions-row'}, [h('button', {class:'btn', onclick:openAddShoppingItemModal}, ['+ كتاب جديد للقائمة']), h('button', {class:'btn secondary', onclick:function(){ checkSeriesNow(true); }}, ['🔔 دوّري على أجزاء جديدة'])])\n    ]));")]:
+    if a in s: s = s.replace(a, b)
+open(out, 'w').write(s)

@@ -1,0 +1,20 @@
+const {chromium}=require('playwright');const fs=require('fs');
+(async()=>{const b=await chromium.launch();const ctx=await b.newContext({viewport:{width:820,height:1100}});const p=await ctx.newPage();
+const errs=[];p.on('pageerror',e=>errs.push(e.message));p.on('dialog',d=>d.accept());const qs=[];
+await ctx.route('**/*',r=>{const u=r.request().url();
+ if(u.includes('supabase.min.js'))return r.fulfill({body:fs.readFileSync('test/fake-supabase.js','utf8'),contentType:'text/javascript'});
+ if(u.includes('googleapis.com/books')){ const q=decodeURIComponent(u.split('q=')[1]||''); qs.push(q);
+   const items = q.includes('Deadman') ? [{volumeInfo:{title:'The Deadman #3',authors:['Prince']}},{volumeInfo:{title:'The Deadman #7',authors:['W. Maxwell Prince'],publishedDate:'2026'}},{volumeInfo:{title:'Other book'}}] : [];
+   return r.fulfill({body:JSON.stringify({items}),contentType:'application/json',headers:{'access-control-allow-origin':'*'}});}
+ if(u.startsWith('file:'))return r.continue(); if(u.includes('xlsx'))return r.fulfill({body:'',contentType:'text/javascript'}); return r.abort();});
+await p.goto('file://'+process.cwd()+'/index.html');await p.waitForTimeout(500);
+await p.fill('#login-overlay input[type=email]','h@x.com');await p.fill('#login-overlay input[type=password]','secret123');await p.click('#login-overlay .btn');await p.waitForTimeout(800);
+await p.click('.tab >> text=إحصائياتي');await p.waitForTimeout(300);
+const [fc]=await Promise.all([p.waitForEvent('filechooser'), p.click('text=استعادة من ملف')]);await fc.setFiles('/home/claude/raffi-private/raffi-import.json');await p.waitForTimeout(8000);
+await p.waitForSelector('#series-overlay',{timeout:15000});await p.waitForTimeout(300);
+await p.waitForTimeout(500);await p.waitForTimeout(2500);
+console.log('queries',qs.length); console.log('toast', await p.$eval('#toast-el',e=>e.innerText).catch(()=>'none')); console.log('overlays', await p.$$eval('.overlay',x=>x.map(o=>o.id)));
+console.log(await p.$eval('#series-overlay',e=>e.innerText).catch(()=>'no overlay'));
+await p.click('text=أضيفي المختار للأمنيات');await p.waitForTimeout(3000);
+console.log(await p.evaluate(()=>{const d=JSON.parse(localStorage.getItem('__fakedb'));return d.rows.wishlist.filter(w=>w.auto_added).map(w=>[w.title,w.series_name])}));
+console.log(errs);await b.close();})();

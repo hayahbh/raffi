@@ -287,7 +287,7 @@
       if(booted || (cloudUser && cloudUser.id===u.id)) return;
       cloudUser = u;
       closeOverlay('login-overlay');
-      cloudLoad().then(function(){ booted = true; bootApp(); }, function(err){
+      cloudLoad().then(function(){ booted = true; bootApp(); setTimeout(maybeCheckSeries, 4000); }, function(err){
         console.warn(err); showLogin('ما قدرت أفتح مكتبتك: ' + (err.message||err));
       });
     });
