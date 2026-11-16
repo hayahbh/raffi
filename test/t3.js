@@ -5,7 +5,7 @@ const gb={items:[{volumeInfo:{title:'ساق البامبو',authors:['سعود �
 await ctx.route('**/*',r=>{const u=r.request().url();
  if(u.includes('supabase.min.js'))return r.fulfill({body:fs.readFileSync('test/fake-supabase.js','utf8'),contentType:'text/javascript'});
  if(u.includes('googleapis.com/books'))return r.fulfill({body:JSON.stringify(gb),contentType:'application/json',headers:{'access-control-allow-origin':'*'}});
- if(u.includes('books.google.com/x.jpg'))return r.fulfill({body:fs.readFileSync('test/login.png'),contentType:'image/png',headers:{'access-control-allow-origin':'*'}});
+ if(u.includes('books.google.com/x.jpg'))return r.fulfill({body:fs.readFileSync('icon-navy.png'),contentType:'image/png',headers:{'access-control-allow-origin':'*'}});
  if(u.startsWith('file:'))return r.continue(); if(u.includes('xlsx'))return r.fulfill({body:'',contentType:'text/javascript'}); return r.abort();});
 await p.goto('file://'+process.cwd()+'/index.html');await p.waitForTimeout(500);
 await p.fill('#login-overlay input[type=email]','h@x.com');await p.fill('#login-overlay input[type=password]','secret123');await p.click('#login-overlay .btn');await p.waitForTimeout(800);
