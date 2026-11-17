@@ -18,7 +18,7 @@
     var isbn = String(item.isbn || '').replace(/[^0-9X]/gi, '');
     if(isbn) c.push('https://covers.openlibrary.org/b/isbn/' + isbn + '-L.jpg?default=false');
     var q = (item.title + ' ' + (item.author && /[؀-ۿ]/.test(item.author) === /[؀-ۿ]/.test(item.title) ? item.author : '')).trim();
-    return webBookSearch(q).catch(function(){ return []; }).then(function(list){
+    return searchBoth(q.replace(/#/g, ' ').replace(/\s+/g, ' ')).then(function(list){
       list.forEach(function(b){
         if(titleMatch(item.title, b.title) < 2) return;
         if(b.coverUrl){ c.push(bigGoogle(b.coverUrl)); if(b.coverUrl.indexOf('-M.jpg') !== -1) c.push(b.coverUrl.replace('-M.jpg', '-L.jpg')); }

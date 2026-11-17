@@ -9,20 +9,37 @@
     });
     return m;
   }
+  function cleanTitle(t){
+    return normalizeAr(String(t||'')).toLowerCase()
+      .replace(/\([^)]*\)/g, ' ')
+      .replace(/\b(vol(ume)?|issue|no|tpb|hc|the)\b\.?/g, ' ')
+      .replace(/[^\u0600-\u06FFa-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  }
   function titleMatch(a, b){
-    var x = normalizeAr(a).toLowerCase().replace(/[^؀-ۿa-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-    var y = normalizeAr(b).toLowerCase().replace(/[^؀-ۿa-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    var x = cleanTitle(a), y = cleanTitle(b);
     if(!x || !y) return 0;
     if(x===y) return 3;
-    if(x.indexOf(y)===0 || y.indexOf(x)===0) return 2;
+    var nx = (x.match(/\d+/g)||[]).join(','), ny = (y.match(/\d+/g)||[]).join(',');
+    var tx = x.replace(/\d+/g, ' ').split(' ').filter(Boolean), ty = y.replace(/\d+/g, ' ').split(' ').filter(Boolean);
+    var short = tx.length <= ty.length ? tx : ty, long = tx.length <= ty.length ? ty : tx;
+    var allIn = short.length && short.every(function(w){ return long.indexOf(w)!==-1; });
+    /* لو فيه رقم جزء لازم يطابق */
+    if(nx && ny && nx.split(',').pop() !== ny.split(',').pop()) return 0;
+    if(allIn && (long.length - short.length) <= 2) return (nx===ny || !nx || !ny) ? 2 : 1;
     if(x.indexOf(y)!==-1 || y.indexOf(x)!==-1) return 1;
     return 0;
+  }
+  function searchBoth(q){
+    /* Google أول، ولو ما لقى شي مطابق نضيف Open Library */
+    return webBookSearch(q).catch(function(){ return []; }).then(function(g){
+      return olSearch(q).catch(function(){ return []; }).then(function(o){ return g.concat(o); });
+    });
   }
   function enrichOne(item){
     var p = item.isbn ? isbnLookup(item.isbn).then(function(b){ return b ? [b] : []; }) : Promise.resolve([]);
     return p.then(function(list){
       if(list.length) return list;
-      return webBookSearch((item.title + ' ' + (item.author && !/[؀-ۿ]/.test(item.author) === !/[؀-ۿ]/.test(item.title) ? item.author : '')).trim());
+      return searchBoth((item.title.replace(/#/g, ' ') + ' ' + (item.author && !/[؀-ۿ]/.test(item.author) === !/[؀-ۿ]/.test(item.title) ? item.author : '')).replace(/\s+/g, ' ').trim());
     }).then(function(list){
       var best = null, score = 0;
       list.forEach(function(b){ var s = titleMatch(item.title, b.title); if(s > score){ score = s; best = b; } });
