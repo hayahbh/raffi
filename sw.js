@@ -1,5 +1,5 @@
 /* رفّي — يخلي التطبيق يفتح بدون نت */
-const SHELL = 'raffi-shell-v1';
+const SHELL = 'raffi-shell-v2';
 const CDN = 'raffi-cdn-v1';
 const IMG = 'raffi-img-v1';
 const KEEP = [SHELL, CDN, IMG];
@@ -35,7 +35,7 @@ self.addEventListener('fetch', (e) => {
 
   // صفحة التطبيق: من النت أول (عشان التحديثات)، وإذا ما فيه نت من الجهاز
   if (req.mode === 'navigate' || (u.origin === location.origin && /\/(index\.html)?$/.test(u.pathname))) {
-    e.respondWith(fetch(req).then((res) => {
+    e.respondWith(fetch(new Request(req.url, {cache: 'no-cache', credentials: 'same-origin'})).then((res) => {
       if (res.ok) caches.open(SHELL).then((c) => c.put('./index.html', res.clone()));
       return res;
     }).catch(() => caches.match('./index.html', {ignoreSearch: true})));

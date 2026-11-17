@@ -351,7 +351,18 @@
   function startCloud(){
     var app = document.getElementById('app');
     if(app) app.innerHTML = '<p class="empty-hint" style="text-align:center;margin-top:40vh;">أفتح رفّك…</p>';
-    if('serviceWorker' in navigator && location.protocol==='https:') navigator.serviceWorker.register('sw.js').catch(function(){});
+    if('serviceWorker' in navigator && location.protocol==='https:'){
+      var hadSW = !!navigator.serviceWorker.controller, reloading = false;
+      navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).then(function(reg){
+        /* كل ما ترجعين للتطبيق يشيّك على تحديث */
+        document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') reg.update().catch(function(){}); });
+      }).catch(function(){});
+      navigator.serviceWorker.addEventListener('controllerchange', function(){
+        if(!hadSW || reloading) return;
+        reloading = true;
+        (syncing || Promise.resolve()).then(function(){ saveLocal(); setTimeout(function(){ location.reload(); }, 400); });
+      });
+    }
     loadLocal().then(function(c){
       if(c && c.state && c.uid){
         try{ applyState(JSON.parse(c.state)); }catch(e){ c = null; }
